@@ -1,0 +1,32 @@
+# Compiled files
+*.class
+target/
+*.jar
+*.war
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Application properties (optional - if it has secrets)
+# application.properties
+
+# Spring Boot
+spring-boot-cli-*.jar
