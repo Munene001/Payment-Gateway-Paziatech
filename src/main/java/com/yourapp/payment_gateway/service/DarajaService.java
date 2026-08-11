@@ -1,6 +1,7 @@
 package com.yourapp.payment_gateway.service;
 
 import okhttp3.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.Base64;
 
@@ -8,7 +9,9 @@ import java.util.Base64;
 public class DarajaService {
 
     private final OkHttpClient client = new OkHttpClient();
-    private static final String BASE_URL = "https://sandbox.safaricom.co.ke";
+    
+    @Value("${daraja.base.url}")
+    private String BASE_URL;
 
     /**
      * Get OAuth token from Daraja
@@ -30,34 +33,29 @@ public class DarajaService {
                 throw new Exception("Failed to get token: " + responseBody);
             }
             
-            String token = extractToken(responseBody);
-            System.out.println("✅ Successfully got access token: " + token);
-            return token;
+            return extractToken(responseBody);
         }
     }
     
-   private String extractToken(String json) {
-    // Remove all whitespace and newlines
-    String cleanJson = json.replaceAll("\\s+", " ");
-    
-    String searchKey = "\"access_token\": \"";
-    int start = cleanJson.indexOf(searchKey);
-    if (start == -1) {
-        searchKey = "\"access_token\":\"";
-        start = cleanJson.indexOf(searchKey);
+    private String extractToken(String json) {
+        String cleanJson = json.replaceAll("\\s+", " ");
+        
+        String searchKey = "\"access_token\": \"";
+        int start = cleanJson.indexOf(searchKey);
+        if (start == -1) {
+            searchKey = "\"access_token\":\"";
+            start = cleanJson.indexOf(searchKey);
+        }
+        if (start == -1) {
+            throw new RuntimeException("access_token not found in response: " + json);
+        }
+        start += searchKey.length();
+        int end = cleanJson.indexOf("\"", start);
+        if (end == -1) {
+            throw new RuntimeException("End quote not found in response: " + json);
+        }
+        return cleanJson.substring(start, end);
     }
-    if (start == -1) {
-        throw new RuntimeException("access_token not found in response: " + json);
-    }
-    start += searchKey.length();
-    int end = cleanJson.indexOf("\"", start);
-    if (end == -1) {
-        throw new RuntimeException("End quote not found in response: " + json);
-    }
-    String token = cleanJson.substring(start, end);
-    System.out.println("🔑 Extracted token: " + token);
-    return token;
-}
 
     /**
      * Send STK Push to customer's phone
@@ -71,12 +69,10 @@ public class DarajaService {
             String orderReference,
             String callbackUrl) throws Exception {
 
-        // Generate password: shortcode + passkey + timestamp
         String timestamp = getCurrentTimestamp();
         String passwordString = shortcode + passkey + timestamp;
         String password = Base64.getEncoder().encodeToString(passwordString.getBytes());
 
-        // For sandbox, use "CustomerPayBillOnline" (works for both Paybill and Till)
         String transactionType = "CustomerPayBillOnline";
 
         String jsonBody = String.format(
@@ -106,8 +102,6 @@ public class DarajaService {
             orderReference
         );
 
-        System.out.println("📤 Sending STK Push to: " + phoneNumber + " | Amount: " + amount);
-
         Request request = new Request.Builder()
             .url(BASE_URL + "/mpesa/stkpush/v1/processrequest")
             .addHeader("Content-Type", "application/json")
@@ -122,7 +116,6 @@ public class DarajaService {
                 throw new Exception("STK Push failed: " + responseBody);
             }
 
-            System.out.println("✅ STK Push sent. Response: " + responseBody);
             return extractCheckoutRequestId(responseBody);
         }
     }
