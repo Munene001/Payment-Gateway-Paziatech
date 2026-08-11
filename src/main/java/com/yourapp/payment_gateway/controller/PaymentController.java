@@ -23,7 +23,6 @@ public class PaymentController {
     @PostMapping("/stk-push")
     public Map<String, Object> stkPush(@RequestBody Map<String, String> request) {
 
-        // Extract fields
         String type = request.get("type");
         String shortcode = request.get("shortcode");
         String consumerKey = request.get("consumerKey");
@@ -32,7 +31,6 @@ public class PaymentController {
         String phoneNumber = request.get("phoneNumber");
         String orderReference = request.get("orderReference");
 
-        // Parse amount
         Double amount = 0.0;
         String amountStr = request.get("amount");
         if (amountStr != null && !amountStr.isEmpty()) {
@@ -43,26 +41,11 @@ public class PaymentController {
             }
         }
 
-        // Log what we received
-        System.out.println("📱 STK Push Request:");
-        System.out.println("   Type: " + type);
-        System.out.println("   Shortcode: " + shortcode);
-        System.out.println("   Amount: " + amount);
-        System.out.println("   Phone: " + phoneNumber);
-        System.out.println("   Order: " + orderReference);
-        System.out.println("   Consumer Key: " + consumerKey);
-        System.out.println("   Consumer Secret: " + consumerSecret);
-        System.out.println("   Passkey: " + passkey);
-
         try {
-            // 1. Get token from Daraja
             String token = darajaService.getAccessToken(consumerKey, consumerSecret);
-            System.out.println("✅ Got token: " + token);
 
-            // 2. Build callback URL from base + path
             String callbackUrl = callbackBaseUrl + "/api/payments/callback";
 
-            // 3. Send STK Push
             String checkoutRequestId = darajaService.sendStkPush(
                 token,
                 shortcode,
@@ -73,9 +56,6 @@ public class PaymentController {
                 callbackUrl
             );
 
-            System.out.println("✅ STK Push sent. CheckoutRequestID: " + checkoutRequestId);
-
-            // 4. Return success response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("CheckoutRequestID", checkoutRequestId);
@@ -85,7 +65,7 @@ public class PaymentController {
             return response;
 
         } catch (Exception e) {
-            System.err.println("❌ Error: " + e.getMessage());
+            System.err.println("❌ STK Push error: " + e.getMessage());
             e.printStackTrace();
 
             Map<String, Object> errorResponse = new HashMap<>();
