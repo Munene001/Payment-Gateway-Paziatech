@@ -1,5 +1,5 @@
-# Stage 1: Build using official Gradle 8.5 & JDK 21 (no gradlew needed)
-FROM gradle:8.5-jdk21-alpine AS builder
+# Stage 1: Build using latest Gradle with JDK 21
+FROM gradle:jdk21-alpine AS builder
 WORKDIR /app
 
 # Copy all project files into the container
