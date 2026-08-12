@@ -1,8 +1,10 @@
 package com.yourapp.payment_gateway.controller;
 
 import com.yourapp.payment_gateway.service.DarajaService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -11,15 +13,16 @@ public class PaymentController {
 
     private final DarajaService darajaService;
 
-    // Constructor injection
+    @Value("${payment.callback.base.url}")
+    private String callbackBaseUrl;
+
     public PaymentController(DarajaService darajaService) {
         this.darajaService = darajaService;
     }
 
     @PostMapping("/stk-push")
-    public void stkPush(@RequestBody Map<String, String> request) {
+    public Map<String, Object> stkPush(@RequestBody Map<String, String> request) {
 
-        // Extract fields
         String type = request.get("type");
         String shortcode = request.get("shortcode");
         String consumerKey = request.get("consumerKey");
@@ -27,11 +30,7 @@ public class PaymentController {
         String passkey = request.get("passkey");
         String phoneNumber = request.get("phoneNumber");
         String orderReference = request.get("orderReference");
-        String businessNumber = request.get("businessNumber");
-        String tillNumber = request.get("tillNumber");
-        String accountNumber = request.get("accountNumber");
 
-        // Parse amount
         Double amount = 0.0;
         String amountStr = request.get("amount");
         if (amountStr != null && !amountStr.isEmpty()) {
@@ -42,22 +41,40 @@ public class PaymentController {
             }
         }
 
-        // Log everything
-        System.out.println("📱 STK Push Request:");
-        System.out.println("   Type: " + type);
-        System.out.println("   Shortcode: " + shortcode);
-        System.out.println("   Amount: " + amount);
-        System.out.println("   Phone: " + phoneNumber);
-        System.out.println("   Order: " + orderReference);
-        System.out.println("   Consumer Key: " + consumerKey);
-        System.out.println("   Consumer Secret: " + consumerSecret);
-        System.out.println("   Passkey: " + passkey);
-        System.out.println("   Business Number: " + businessNumber);
-        System.out.println("   Till Number: " + tillNumber);
-        System.out.println("   Account Number: " + accountNumber);
+        try {
+            String token = darajaService.getAccessToken(consumerKey, consumerSecret);
+
+            String callbackUrl = callbackBaseUrl + "/api/payments/callback";
+
+            String checkoutRequestId = darajaService.sendStkPush(
+                token,
+                shortcode,
+                passkey,
+                amount,
+                phoneNumber,
+                orderReference,
+                callbackUrl
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("CheckoutRequestID", checkoutRequestId);
+            response.put("ResponseCode", "0");
+            response.put("ResponseDescription", "Success. Request accepted for processing");
+
+            return response;
+
+        } catch (Exception e) {
+            System.err.println("❌ STK Push error: " + e.getMessage());
+            e.printStackTrace();
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return errorResponse;
+        }
     }
 
-    // Test endpoint for getting token
     @GetMapping("/test-token")
     public String testToken(
             @RequestParam String consumerKey,
