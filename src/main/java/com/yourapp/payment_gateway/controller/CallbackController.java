@@ -18,14 +18,36 @@ public class CallbackController {
     @Value("${nextjs.internal.secret}")
     private String internalSecret;
 
+    @SuppressWarnings("unchecked")
     @PostMapping("/callback")
     public Map<String, Object> handleCallback(@RequestBody Map<String, Object> callback) {
         
-        Map<String, Object> body = (Map<String, Object>) callback.get("Body");
-        Map<String, Object> stkCallback = (Map<String, Object>) body.get("stkCallback");
+        // Safely extract body
+        Object bodyObj = callback.get("Body");
+        if (!(bodyObj instanceof Map)) {
+            System.err.println("❌ Invalid callback: 'Body' is not a Map");
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("ResultCode", 1);
+            errorResponse.put("ResultDesc", "Invalid callback structure");
+            return errorResponse;
+        }
+        Map<String, Object> body = (Map<String, Object>) bodyObj;
         
+        // Safely extract stkCallback
+        Object stkCallbackObj = body.get("stkCallback");
+        if (!(stkCallbackObj instanceof Map)) {
+            System.err.println("❌ Invalid callback: 'stkCallback' is not a Map");
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("ResultCode", 1);
+            errorResponse.put("ResultDesc", "Invalid stkCallback structure");
+            return errorResponse;
+        }
+        Map<String, Object> stkCallback = (Map<String, Object>) stkCallbackObj;
+        
+        // Safely extract values
         String checkoutRequestId = (String) stkCallback.get("CheckoutRequestID");
-        int resultCode = (int) stkCallback.get("ResultCode");
+        Integer resultCodeObj = (Integer) stkCallback.get("ResultCode");
+        int resultCode = resultCodeObj != null ? resultCodeObj : -1;
         String resultDesc = (String) stkCallback.get("ResultDesc");
         
         String status;
