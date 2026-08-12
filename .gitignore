@@ -1,7 +1,6 @@
 # Compiled files
 *.class
 target/
-*.jar
 *.war
 
 # IDE files
@@ -30,3 +29,7 @@ mvnw.cmd
 
 # Spring Boot
 spring-boot-cli-*.jar
+
+# Gradle wrapper - KEEP the wrapper jar!
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
