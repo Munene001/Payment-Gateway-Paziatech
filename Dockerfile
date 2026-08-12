@@ -1,11 +1,20 @@
-FROM eclipse-temurin:21-jdk-alpine AS builder
+# Stage 1: Build using official Gradle 8.5 & JDK 21 (no gradlew needed)
+FROM gradle:8.5-jdk21-alpine AS builder
 WORKDIR /app
-COPY . .
-RUN chmod +x gradlew && ./gradlew bootJar -x test
 
+# Copy all project files into the container
+COPY --chown=gradle:gradle . .
+
+# Build the Spring Boot JAR directly using pre-installed Gradle
+RUN gradle bootJar --no-daemon -x test
+
+# Stage 2: Minimal Java 21 Runtime image
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
+
+# Copy the built JAR from the builder stage
 COPY --from=builder /app/build/libs/*.jar app.jar
+
 EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar", "--spring.config.additional-location=optional:file:/app/config/application-prod.properties"]
