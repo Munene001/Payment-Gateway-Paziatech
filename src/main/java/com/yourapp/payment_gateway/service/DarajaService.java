@@ -4,6 +4,10 @@ import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.Base64;
+import java.util.Locale;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,7 +23,7 @@ public class DarajaService {
     public String getAccessToken(String consumerKey, String consumerSecret) throws Exception {
         logger.info("Getting OAuth token");
         
-        String credentials = consumerKey + ":" + consumerSecret;
+        String credentials = consumerKey.trim() + ":" + consumerSecret.trim();
         String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes());
         
         String url = BASE_URL + "/oauth/v1/generate?grant_type=client_credentials";
@@ -70,6 +74,7 @@ public class DarajaService {
 
     public String sendStkPush(
             String token,
+            String transactionType, 
             String shortcode,
             String passkey,
             double amount,
@@ -79,19 +84,37 @@ public class DarajaService {
 
         logger.info("Sending STK Push for order: {}, amount: {}", orderReference, amount);
 
+        // 2. Sanitize inputs
+        String cleanShortcode = shortcode != null ? shortcode.trim() : "";
+        String cleanPasskey = passkey != null ? passkey.trim() : "";
+        String cleanPhone = phoneNumber != null ? phoneNumber.trim().replace("+", "") : "";
+        String cleanOrderRef = orderReference != null ? orderReference.trim() : "";
+        String cleanCallback = callbackUrl != null ? callbackUrl.trim() : "";
+
+        // 3. Set timestamp explicitly to Nairobi time (UTC+3 / EAT)
         String timestamp = getCurrentTimestamp();
-        String passwordString = shortcode + passkey + timestamp;
+
+        // 4. Compute Base64 Password
+        String passwordString = cleanShortcode + cleanPasskey + timestamp;
         String password = Base64.getEncoder().encodeToString(passwordString.getBytes());
 
-        String transactionType = "CustomerPayBillOnline";
+        // Default transaction type fallback
+        String finalTransactionType = (transactionType != null && !transactionType.isBlank()) 
+                ? transactionType.trim() 
+                : "CustomerPayBillOnline";
 
+        // 5. Convert amount to whole integer (M-Pesa standard)
+        long roundedAmount = Math.max(1, Math.round(amount));
+
+        // 6. Construct JSON using Locale.US (prevents comma decimals like 1,00 on EU servers)
         String jsonBody = String.format(
+            Locale.US,
             "{"
             + "\"BusinessShortCode\":\"%s\","
             + "\"Password\":\"%s\","
             + "\"Timestamp\":\"%s\","
             + "\"TransactionType\":\"%s\","
-            + "\"Amount\":\"%.2f\","
+            + "\"Amount\":%d,"
             + "\"PartyA\":\"%s\","
             + "\"PartyB\":\"%s\","
             + "\"PhoneNumber\":\"%s\","
@@ -99,18 +122,20 @@ public class DarajaService {
             + "\"AccountReference\":\"%s\","
             + "\"TransactionDesc\":\"Payment for order %s\""
             + "}",
-            shortcode,
+            cleanShortcode,
             password,
             timestamp,
-            transactionType,
-            amount,
-            phoneNumber,
-            shortcode,
-            phoneNumber,
-            callbackUrl,
-            orderReference,
-            orderReference
+            finalTransactionType,
+            roundedAmount,
+            cleanPhone,
+            cleanShortcode,
+            cleanPhone,
+            cleanCallback,
+            cleanOrderRef,
+            cleanOrderRef
         );
+
+        logger.info("Outgoing Payload JSON: {}", jsonBody);
 
         String url = BASE_URL + "/mpesa/stkpush/v1/processrequest";
 
@@ -123,6 +148,7 @@ public class DarajaService {
 
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body().string();
+            logger.info("Daraja raw response: {}", responseBody);
             
             if (!response.isSuccessful()) {
                 logger.error("STK Push failed: status={}, body={}", response.code(), responseBody);
@@ -130,7 +156,7 @@ public class DarajaService {
             }
 
             String checkoutRequestId = extractCheckoutRequestId(responseBody);
-            logger.info("STK Push sent: {}", checkoutRequestId);
+            logger.info("STK Push sent successfully: {}", checkoutRequestId);
             return checkoutRequestId;
         } catch (Exception e) {
             logger.error("Error sending STK Push: {}", e.getMessage());
@@ -138,10 +164,13 @@ public class DarajaService {
         }
     }
 
+    /**
+     * Generates a 14-digit timestamp in East Africa Time (Africa/Nairobi).
+     * Strictly YYYYMMDDHHmmss format required by Safaricom Daraja API.
+     */
     private String getCurrentTimestamp() {
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        java.time.format.DateTimeFormatter formatter = 
-            java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Africa/Nairobi"));
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
         return now.format(formatter);
     }
 
