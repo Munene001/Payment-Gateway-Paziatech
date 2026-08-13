@@ -19,6 +19,10 @@ public class PaymentController {
     @Value("${payment.callback.base.url}")
     private String callbackBaseUrl;
 
+    // 1. Inject the secret token for Safaricom callback validation
+    @Value("${payment.callback.secret}")
+    private String callbackSecret;
+
     public PaymentController(DarajaService darajaService) {
         this.darajaService = darajaService;
     }
@@ -28,14 +32,17 @@ public class PaymentController {
         logger.info("STK Push request received");
 
         String type = request.get("type");
-        String shortcode = request.get("shortcode");
-        String consumerKey = request.get("consumerKey");
-        String consumerSecret = request.get("consumerSecret");
-        String passkey = request.get("passkey");
-        String phoneNumber = request.get("phoneNumber");
-        String orderReference = request.get("orderReference");
+        String transactionType = (type != null && !type.isBlank()) ? type.trim() : "CustomerPayBillOnline";
+        
+        String shortcode = request.get("shortcode") != null ? request.get("shortcode").trim() : "";
+        String consumerKey = request.get("consumerKey") != null ? request.get("consumerKey").trim() : "";
+        String consumerSecret = request.get("consumerSecret") != null ? request.get("consumerSecret").trim() : "";
+        String passkey = request.get("passkey") != null ? request.get("passkey").trim() : "";
+        String orderReference = request.get("orderReference") != null ? request.get("orderReference").trim() : "";
+        
+        String phoneNumber = request.get("phoneNumber") != null ? request.get("phoneNumber").trim().replace("+", "") : "";
 
-        logger.info("Order: {}, Phone: {}, Amount: {}", orderReference, phoneNumber, request.get("amount"));
+        logger.info("Order: {}, Phone: {}, Amount: {}, Type: {}", orderReference, phoneNumber, request.get("amount"), transactionType);
 
         Double amount = 0.0;
         String amountStr = request.get("amount");
@@ -44,17 +51,30 @@ public class PaymentController {
                 amount = Double.parseDouble(amountStr);
             } catch (NumberFormatException e) {
                 logger.error("Invalid amount format: {}", amountStr);
-                amount = 0.0;
             }
+        }
+
+        if (amount <= 0) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Invalid or missing payment amount. Amount must be greater than 0.");
+            return errorResponse;
         }
 
         try {
             String token = darajaService.getAccessToken(consumerKey, consumerSecret);
 
-            String callbackUrl = callbackBaseUrl + "/api/payments/callback";
+            String cleanBaseUrl = callbackBaseUrl.endsWith("/") 
+                    ? callbackBaseUrl.substring(0, callbackBaseUrl.length() - 1) 
+                    : callbackBaseUrl;
+
+            // 2. Attach the secret token to the callback URL sent to Safaricom
+            String cleanSecret = callbackSecret != null ? callbackSecret.trim() : "";
+            String callbackUrl = cleanBaseUrl + "/api/payments/callback?secret=" + cleanSecret;
 
             String checkoutRequestId = darajaService.sendStkPush(
                 token,
+                transactionType,
                 shortcode,
                 passkey,
                 amount,
@@ -87,7 +107,7 @@ public class PaymentController {
             @RequestParam String consumerKey,
             @RequestParam String consumerSecret) {
         try {
-            String token = darajaService.getAccessToken(consumerKey, consumerSecret);
+            String token = darajaService.getAccessToken(consumerKey.trim(), consumerSecret.trim());
             return "Token obtained successfully";
         } catch (Exception e) {
             logger.error("Token test failed: {}", e.getMessage());
