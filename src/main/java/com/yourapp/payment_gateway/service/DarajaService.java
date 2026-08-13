@@ -84,12 +84,23 @@ public class DarajaService {
 
         logger.info("Sending STK Push for order: {}, amount: {}", orderReference, amount);
 
-        // 2. Sanitize inputs
+        // 1. Sanitize inputs
         String cleanShortcode = shortcode != null ? shortcode.trim() : "";
         String cleanPasskey = passkey != null ? passkey.trim() : "";
         String cleanPhone = phoneNumber != null ? phoneNumber.trim().replace("+", "") : "";
         String cleanOrderRef = orderReference != null ? orderReference.trim() : "";
         String cleanCallback = callbackUrl != null ? callbackUrl.trim() : "";
+
+        // 2. Automatically translate DB types ('paybill' / 'till') to Safaricom's exact strings
+        String rawType = transactionType != null ? transactionType.trim().toLowerCase() : "";
+        String finalTransactionType;
+
+        if ("till".equals(rawType) || "buygoods".equals(rawType) || "customerbuygoodsonline".equals(rawType)) {
+            finalTransactionType = "CustomerBuyGoodsOnline";
+        } else {
+            // Default to PayBill for "paybill", null, or any other value
+            finalTransactionType = "CustomerPayBillOnline";
+        }
 
         // 3. Set timestamp explicitly to Nairobi time (UTC+3 / EAT)
         String timestamp = getCurrentTimestamp();
@@ -97,11 +108,6 @@ public class DarajaService {
         // 4. Compute Base64 Password
         String passwordString = cleanShortcode + cleanPasskey + timestamp;
         String password = Base64.getEncoder().encodeToString(passwordString.getBytes());
-
-        // Default transaction type fallback
-        String finalTransactionType = (transactionType != null && !transactionType.isBlank()) 
-                ? transactionType.trim() 
-                : "CustomerPayBillOnline";
 
         // 5. Convert amount to whole integer (M-Pesa standard)
         long roundedAmount = Math.max(1, Math.round(amount));
