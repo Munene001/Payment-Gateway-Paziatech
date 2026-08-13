@@ -4,26 +4,28 @@ import okhttp3.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.util.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class DarajaService {
 
+    private static final Logger logger = LoggerFactory.getLogger(DarajaService.class);
     private final OkHttpClient client = new OkHttpClient();
     
     @Value("${daraja.base.url}")
     private String BASE_URL;
-    /** test test test*/
 
-    /**
-     * Get OAuth token from Daraja
-     */
     public String getAccessToken(String consumerKey, String consumerSecret) throws Exception {
+        logger.info("Getting OAuth token");
         
         String credentials = consumerKey + ":" + consumerSecret;
         String encodedCredentials = Base64.getEncoder().encodeToString(credentials.getBytes());
         
+        String url = BASE_URL + "/oauth/v1/generate?grant_type=client_credentials";
+        
         Request request = new Request.Builder()
-            .url(BASE_URL + "/oauth/v1/generate?grant_type=client_credentials")
+            .url(url)
             .addHeader("Authorization", "Basic " + encodedCredentials)
             .build();
         
@@ -31,10 +33,16 @@ public class DarajaService {
             String responseBody = response.body().string();
             
             if (!response.isSuccessful()) {
+                logger.error("Failed to get token: status={}, body={}", response.code(), responseBody);
                 throw new Exception("Failed to get token: " + responseBody);
             }
             
-            return extractToken(responseBody);
+            String token = extractToken(responseBody);
+            logger.info("Token obtained successfully");
+            return token;
+        } catch (Exception e) {
+            logger.error("Error getting token: {}", e.getMessage());
+            throw e;
         }
     }
     
@@ -48,19 +56,18 @@ public class DarajaService {
             start = cleanJson.indexOf(searchKey);
         }
         if (start == -1) {
-            throw new RuntimeException("access_token not found in response: " + json);
+            logger.error("access_token not found in response");
+            throw new RuntimeException("access_token not found in response");
         }
         start += searchKey.length();
         int end = cleanJson.indexOf("\"", start);
         if (end == -1) {
-            throw new RuntimeException("End quote not found in response: " + json);
+            logger.error("End quote not found in response");
+            throw new RuntimeException("End quote not found in response");
         }
         return cleanJson.substring(start, end);
     }
 
-    /**
-     * Send STK Push to customer's phone
-     */
     public String sendStkPush(
             String token,
             String shortcode,
@@ -69,6 +76,8 @@ public class DarajaService {
             String phoneNumber,
             String orderReference,
             String callbackUrl) throws Exception {
+
+        logger.info("Sending STK Push for order: {}, amount: {}", orderReference, amount);
 
         String timestamp = getCurrentTimestamp();
         String passwordString = shortcode + passkey + timestamp;
@@ -103,8 +112,10 @@ public class DarajaService {
             orderReference
         );
 
+        String url = BASE_URL + "/mpesa/stkpush/v1/processrequest";
+
         Request request = new Request.Builder()
-            .url(BASE_URL + "/mpesa/stkpush/v1/processrequest")
+            .url(url)
             .addHeader("Content-Type", "application/json")
             .addHeader("Authorization", "Bearer " + token)
             .post(RequestBody.create(jsonBody, MediaType.parse("application/json")))
@@ -112,12 +123,18 @@ public class DarajaService {
 
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body().string();
-
+            
             if (!response.isSuccessful()) {
+                logger.error("STK Push failed: status={}, body={}", response.code(), responseBody);
                 throw new Exception("STK Push failed: " + responseBody);
             }
 
-            return extractCheckoutRequestId(responseBody);
+            String checkoutRequestId = extractCheckoutRequestId(responseBody);
+            logger.info("STK Push sent: {}", checkoutRequestId);
+            return checkoutRequestId;
+        } catch (Exception e) {
+            logger.error("Error sending STK Push: {}", e.getMessage());
+            throw e;
         }
     }
 
@@ -132,12 +149,14 @@ public class DarajaService {
         String searchKey = "\"CheckoutRequestID\":\"";
         int start = json.indexOf(searchKey);
         if (start == -1) {
-            throw new RuntimeException("CheckoutRequestID not found in response: " + json);
+            logger.error("CheckoutRequestID not found in response");
+            throw new RuntimeException("CheckoutRequestID not found in response");
         }
         start += searchKey.length();
         int end = json.indexOf("\"", start);
         if (end == -1) {
-            throw new RuntimeException("End quote not found in response: " + json);
+            logger.error("End quote not found in response");
+            throw new RuntimeException("End quote not found in response");
         }
         return json.substring(start, end);
     }
