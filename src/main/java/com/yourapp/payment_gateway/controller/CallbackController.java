@@ -96,7 +96,7 @@ public class CallbackController {
                 retryable = false;
                 displayMessage = "Payment successful!";
 
-                // 5. Extract M-Pesa Receipt Number and Phone Number from CallbackMetadata
+                // 5. Extract b M-Pesa Receipt Number and Phone Number from CallbackMetadata
                 Object metadataObj = stkCallback.get("CallbackMetadata");
                 if (metadataObj instanceof Map) {
                     Map<String, Object> metadata = (Map<String, Object>) metadataObj;
