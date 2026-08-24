@@ -35,19 +35,20 @@ public class CallbackController {
     @Value("${nextjs.internal.secret}")
     private String internalSecret;
 
-    // 1. Inject expected secret token
     @Value("${payment.callback.secret}")
     private String expectedCallbackSecret;
 
+    // ================================================
+    // SAFARICOM CALLBACK HANDLER
+    // ================================================
     @SuppressWarnings("unchecked")
     @PostMapping("/callback")
     public Map<String, Object> handleCallback(
-            @RequestParam(value = "secret", required = false) String secret, // 2. Receive secret param from URL
+            @RequestParam(value = "secret", required = false) String secret,
             @RequestBody Map<String, Object> callback) {
 
         logger.info("Received callback from Safaricom");
 
-        // 3. Security Check: Reject fake/unauthorized callbacks
         if (secret == null || !secret.trim().equals(expectedCallbackSecret != null ? expectedCallbackSecret.trim() : "")) {
             logger.error("Unauthorized callback attempt with invalid or missing secret: {}", secret);
             return createErrorResponse("Unauthorized");
@@ -69,7 +70,6 @@ public class CallbackController {
 
         String checkoutRequestId = (String) stkCallback.get("CheckoutRequestID");
 
-        // 4. Safe Number Parsing for ResultCode
         int resultCode = -1;
         Object resultCodeObj = stkCallback.get("ResultCode");
         if (resultCodeObj instanceof Number) {
@@ -82,13 +82,13 @@ public class CallbackController {
 
         String resultDesc = (String) stkCallback.get("ResultDesc");
 
-        logger.info("Callback: CheckoutRequestID={}, ResultCode={}", checkoutRequestId, resultCode);
+        logger.info("Safaricom Callback: CheckoutRequestID={}, ResultCode={}", checkoutRequestId, resultCode);
 
         String status;
         boolean retryable;
         String displayMessage;
-        String mpesaReceiptNumber = null;
-        String phoneNumber = null;
+        String mpesaReceiptNumber = "";
+        String phoneNumber = "";
 
         switch (resultCode) {
             case 0:
@@ -96,7 +96,6 @@ public class CallbackController {
                 retryable = false;
                 displayMessage = "Payment successful!";
 
-                // 5. Extract b M-Pesa Receipt Number and Phone Number from CallbackMetadata
                 Object metadataObj = stkCallback.get("CallbackMetadata");
                 if (metadataObj instanceof Map) {
                     Map<String, Object> metadata = (Map<String, Object>) metadataObj;
@@ -107,9 +106,9 @@ public class CallbackController {
                             String name = (String) item.get("Name");
                             Object value = item.get("Value");
                             if ("MpesaReceiptNumber".equals(name)) {
-                                mpesaReceiptNumber = String.valueOf(value);
+                                mpesaReceiptNumber = value != null ? String.valueOf(value) : "";
                             } else if ("PhoneNumber".equals(name)) {
-                                phoneNumber = String.valueOf(value);
+                                phoneNumber = value != null ? String.valueOf(value) : "";
                             }
                         }
                     }
@@ -121,6 +120,7 @@ public class CallbackController {
                 status = "CANCELLED";
                 retryable = true;
                 displayMessage = "Payment cancelled by user";
+                mpesaReceiptNumber = "CANCELLED";
                 logger.warn("Payment cancelled by user: {}", checkoutRequestId);
                 break;
 
@@ -128,6 +128,7 @@ public class CallbackController {
                 status = "INSUFFICIENT_FUNDS";
                 retryable = true;
                 displayMessage = "Insufficient funds";
+                mpesaReceiptNumber = "FAILED";
                 logger.warn("Insufficient funds: {}", checkoutRequestId);
                 break;
 
@@ -135,6 +136,7 @@ public class CallbackController {
                 status = "WRONG_PIN";
                 retryable = true;
                 displayMessage = "Wrong PIN entered";
+                mpesaReceiptNumber = "FAILED";
                 logger.warn("Wrong PIN: {}", checkoutRequestId);
                 break;
 
@@ -142,6 +144,7 @@ public class CallbackController {
                 status = "TIMEOUT";
                 retryable = true;
                 displayMessage = "Transaction timeout";
+                mpesaReceiptNumber = "TIMEOUT";
                 logger.warn("Transaction timeout: {}", checkoutRequestId);
                 break;
 
@@ -149,6 +152,7 @@ public class CallbackController {
                 status = "SYSTEM_ERROR";
                 retryable = false;
                 displayMessage = "Service temporarily unavailable";
+                mpesaReceiptNumber = "SYSTEM_ERROR";
                 logger.error("System configuration error 4999 for request: {}", checkoutRequestId);
                 break;
 
@@ -156,33 +160,204 @@ public class CallbackController {
                 status = "FAILED";
                 retryable = true;
                 displayMessage = "Payment failed";
+                mpesaReceiptNumber = "FAILED";
                 logger.error("Payment failed with code {}: {}", resultCode, checkoutRequestId);
                 break;
         }
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("checkoutRequestId", checkoutRequestId);
-        payload.put("status", status);
-        payload.put("resultCode", resultCode);
-        payload.put("resultDesc", resultDesc);
-        payload.put("retryable", retryable);
-        payload.put("displayMessage", displayMessage);
-        payload.put("mpesaReceiptNumber", mpesaReceiptNumber);
-        payload.put("phoneNumber", phoneNumber);
+        Map<String, Object> payload = buildUnifiedPayload(
+            checkoutRequestId, status, resultCode, resultDesc, 
+            retryable, displayMessage, mpesaReceiptNumber, phoneNumber
+        );
 
         CompletableFuture.runAsync(() -> forwardToNextJs(payload));
 
         Map<String, Object> response = new HashMap<>();
         response.put("ResultCode", 0);
         response.put("ResultDesc", "Success");
-        logger.info("Callback acknowledged for {}", checkoutRequestId);
+        logger.info("Safaricom callback acknowledged for {}", checkoutRequestId);
         return response;
+    }
+
+    // ================================================
+    // KOPOKOPO CALLBACK HANDLER
+    // ================================================
+    @SuppressWarnings("unchecked")
+    @PostMapping("/kopokopo-callback")
+    public Map<String, Object> handleKopokopoCallback(
+            @RequestParam(value = "secret", required = false) String secret,
+            @RequestHeader(value = "X-KopoKopo-Signature", required = false) String signature,
+            @RequestBody String rawRequestBody) {
+
+        logger.info("Received callback from Kopo Kopo");
+
+        if (secret == null || !secret.trim().equals(expectedCallbackSecret != null ? expectedCallbackSecret.trim() : "")) {
+            logger.error("Unauthorized Kopo Kopo callback attempt with invalid or missing secret: {}", secret);
+            return createErrorResponse("Unauthorized");
+        }
+
+        try {
+            Map<String, Object> callback = objectMapper.readValue(rawRequestBody, Map.class);
+
+            String tillNumber = "";
+            String resourceId = null;
+            Long orderId = null;
+            String status = null;
+            String receiptNumber = "";
+
+            // Parse Data Envelope
+            if (callback.get("data") instanceof Map) {
+                Map<String, Object> data = (Map<String, Object>) callback.get("data");
+                if (data.containsKey("id")) {
+                    resourceId = (String) data.get("id");
+                }
+
+                if (data.get("attributes") instanceof Map) {
+                    Map<String, Object> attributes = (Map<String, Object>) data.get("attributes");
+                    
+                    if (attributes.get("till_number") != null) {
+                        tillNumber = (String) attributes.get("till_number");
+                    }
+                    if (attributes.get("status") != null) {
+                        status = (String) attributes.get("status");
+                    }
+
+                    // Metadata extraction
+                    if (attributes.get("metadata") instanceof Map) {
+                        Map<String, Object> metadata = (Map<String, Object>) attributes.get("metadata");
+                        if (metadata.get("order_id") != null) {
+                            orderId = ((Number) metadata.get("order_id")).longValue();
+                        }
+                    }
+
+                    // Event extraction
+                    if (attributes.get("event") instanceof Map) {
+                        Map<String, Object> event = (Map<String, Object>) attributes.get("event");
+                        if (event.get("resource") instanceof Map) {
+                            Map<String, Object> resource = (Map<String, Object>) event.get("resource");
+                            
+                            if (tillNumber.isEmpty() && resource.get("till_number") != null) {
+                                tillNumber = (String) resource.get("till_number");
+                            }
+
+                            // Kopo Kopo uses "reference" as the M-Pesa receipt number
+                            if (resource.get("reference") != null) {
+                                receiptNumber = String.valueOf(resource.get("reference"));
+                            } else if (resource.get("receipt_number") != null) {
+                                receiptNumber = String.valueOf(resource.get("receipt_number"));
+                            }
+                        }
+                    }
+
+                    if (receiptNumber.isEmpty() && attributes.get("reference") != null) {
+                        receiptNumber = String.valueOf(attributes.get("reference"));
+                    }
+                }
+            }
+
+            // Fallback: Check root event object (K2Connect alternative format)
+            if (resourceId == null && callback.get("event") instanceof Map) {
+                Map<String, Object> event = (Map<String, Object>) callback.get("event");
+                if (event.get("resource") instanceof Map) {
+                    Map<String, Object> resource = (Map<String, Object>) event.get("resource");
+                    if (resource.get("id") != null) {
+                        resourceId = (String) resource.get("id");
+                    }
+                    if (tillNumber.isEmpty() && resource.get("till_number") != null) {
+                        tillNumber = (String) resource.get("till_number");
+                    }
+                }
+            }
+
+            if (resourceId == null || resourceId.isEmpty()) {
+                logger.error("Failed to extract resourceId from Kopo Kopo callback");
+                return createErrorResponse("Invalid callback: resourceId not found");
+            }
+
+            int resultCode;
+            boolean retryable;
+            String unifiedStatus;
+            String displayMessage;
+
+            if ("success".equalsIgnoreCase(status)) {
+                unifiedStatus = "COMPLETED";
+                resultCode = 0;
+                retryable = false;
+                displayMessage = "Payment successful!";
+            } else {
+                unifiedStatus = "FAILED";
+                resultCode = 1;
+                retryable = true;
+                displayMessage = "Payment failed. Please try again.";
+                receiptNumber = "FAILED";
+            }
+
+            Map<String, Object> payload = buildUnifiedPayload(
+                resourceId,
+                unifiedStatus,
+                resultCode,
+                displayMessage,
+                retryable,
+                displayMessage,
+                receiptNumber,
+                ""
+            );
+
+            payload.put("isKopokopo", true);
+            payload.put("rawBodyString", rawRequestBody);
+            payload.put("kopokopoSignature", signature != null ? signature : "");
+            payload.put("tillNumber", tillNumber);
+            
+            if (orderId != null) {
+                payload.put("orderId", orderId);
+            }
+
+            logger.info("Kopo Kopo Callback: resourceId={}, status={}, till={}, receipt={}, orderId={}", 
+                        resourceId, status, tillNumber, receiptNumber, orderId);
+
+            CompletableFuture.runAsync(() -> forwardToNextJs(payload));
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("ResultCode", 0);
+            response.put("ResultDesc", "Success");
+            logger.info("Kopo Kopo callback acknowledged for {}", resourceId);
+            return response;
+
+        } catch (Exception e) {
+            logger.error("Error processing Kopo Kopo callback: {}", e.getMessage(), e);
+            return createErrorResponse("Internal error");
+        }
+    }
+
+    // ================================================
+    // SHARED HELPER METHODS
+    // ================================================
+
+    private Map<String, Object> buildUnifiedPayload(
+            String checkoutRequestId,
+            String status,
+            int resultCode,
+            String resultDesc,
+            boolean retryable,
+            String displayMessage,
+            String mpesaReceiptNumber,
+            String phoneNumber) {
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("checkoutRequestId", checkoutRequestId);
+        payload.put("status", status);
+        payload.put("resultCode", resultCode);
+        payload.put("resultDesc", resultDesc != null ? resultDesc : "");
+        payload.put("retryable", retryable);
+        payload.put("displayMessage", displayMessage != null ? displayMessage : "");
+        payload.put("mpesaReceiptNumber", mpesaReceiptNumber != null ? mpesaReceiptNumber : "");
+        payload.put("phoneNumber", phoneNumber != null ? phoneNumber : "");
+        return payload;
     }
 
     private void forwardToNextJs(Map<String, Object> payload) {
         try {
             String nextJsUrl = NEXTJS_URL.replaceAll("/+$", "") + "/api/shops/payments/update-order";
-
             String jsonBody = objectMapper.writeValueAsString(payload);
 
             HttpRequest request = HttpRequest.newBuilder()
