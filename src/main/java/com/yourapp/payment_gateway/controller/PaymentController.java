@@ -108,7 +108,7 @@ public class PaymentController {
     }
 
     // ================================================
-    // NEW: KOPOKOPO STK PUSH
+    // KOPOKOPO STK PUSH (UPDATED - REMOVED SECRET FROM URL)
     // ================================================
     @PostMapping("/kopokopo-stk-push")
     public Map<String, Object> kopokopoStkPush(@RequestBody Map<String, String> request) {
@@ -155,8 +155,8 @@ public class PaymentController {
                     ? callbackBaseUrl.substring(0, callbackBaseUrl.length() - 1) 
                     : callbackBaseUrl;
 
-            String cleanSecret = callbackSecret != null ? callbackSecret.trim() : "";
-            String callbackUrl = cleanBaseUrl + "/api/payments/kopokopo-callback?secret=" + cleanSecret;
+            // FIX: Removed ?secret= parameter for Kopokopo production
+            String callbackUrl = cleanBaseUrl + "/api/payments/kopokopo-callback";
 
             String resourceId = kopokopoService.sendStkPush(
                 accessToken,
