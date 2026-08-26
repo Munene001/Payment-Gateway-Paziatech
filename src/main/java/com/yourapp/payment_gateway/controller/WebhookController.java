@@ -57,9 +57,9 @@ public class WebhookController {
         }
 
         // Build webhook URL using Spring Boot's own properties
+        // FIX: Removed ?secret= parameter for Kopokopo production
         String cleanBaseUrl = callbackBaseUrl != null ? callbackBaseUrl.replaceAll("/+$", "") : "";
-        String cleanSecret = callbackSecret != null ? callbackSecret.trim() : "";
-        String webhookUrl = cleanBaseUrl + "/api/payments/kopokopo-callback?secret=" + cleanSecret;
+        String webhookUrl = cleanBaseUrl + "/api/payments/kopokopo-callback";
 
         logger.info("📍 Webhook URL: {}", webhookUrl);
 
