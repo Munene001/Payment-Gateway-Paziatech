@@ -94,6 +94,11 @@ public class KopokopoService {
 
             String token = extractAccessToken(responseBody);
             logger.info("✅ Kopo Kopo token obtained successfully for clientId: {}", clientId);
+            
+            // 🔑 LOG FULL TOKEN FOR TESTING PURPOSES ONLY
+            // ⚠️ REMOVE THIS LINE AFTER DEBUGGING!
+            logger.info("🔑 FULL ACCESS TOKEN: {}", token);
+            
             return token;
         } catch (Exception e) {
             logger.error("Error getting Kopo Kopo token: {}", e.getMessage());
@@ -423,6 +428,24 @@ public class KopokopoService {
         } else {
             tokenMap.clear();
             logger.info("🗑️ All Kopo Kopo tokens cleared");
+        }
+    }
+
+    // ================================================
+    // DEBUG METHOD - LOG CURRENT TOKEN
+    // ================================================
+    public void logCurrentToken(String clientId) {
+        CachedToken cached = tokenMap.get(clientId);
+        if (cached != null && cached.isValid()) {
+            logger.info("========================================");
+            logger.info("🔑 CURRENT ACCESS TOKEN FOR TESTING:");
+            logger.info("📋 Client ID: {}", clientId);
+            logger.info("🔑 Token: {}", cached.token);
+            logger.info("⏰ Expires in: {} seconds", 
+                (cached.expiryTime - System.currentTimeMillis()) / 1000);
+            logger.info("========================================");
+        } else {
+            logger.warn("⚠️ No valid cached token found for clientId: {}", clientId);
         }
     }
 }
