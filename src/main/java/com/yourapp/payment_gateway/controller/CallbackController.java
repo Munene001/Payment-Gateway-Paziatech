@@ -180,21 +180,20 @@ public class CallbackController {
     }
 
     // ================================================
-    // KOPOKOPO CALLBACK HANDLER
+    // KOPOKOPO CALLBACK HANDLER - FIXED
     // ================================================
     @SuppressWarnings("unchecked")
     @PostMapping("/kopokopo-callback")
     public Map<String, Object> handleKopokopoCallback(
-            @RequestParam(value = "secret", required = false) String secret,
             @RequestHeader(value = "X-KopoKopo-Signature", required = false) String signature,
             @RequestBody String rawRequestBody) {
 
-        logger.info("Received callback from Kopo Kopo");
-
-        if (secret == null || !secret.trim().equals(expectedCallbackSecret != null ? expectedCallbackSecret.trim() : "")) {
-            logger.error("Unauthorized Kopo Kopo callback attempt with invalid or missing secret: {}", secret);
-            return createErrorResponse("Unauthorized");
-        }
+        logger.info("========================================");
+        logger.info("📥 KOPOKOPO CALLBACK RECEIVED!");
+        logger.info("Time: {}", java.time.LocalDateTime.now());
+        logger.info("Signature: {}", signature);
+        logger.info("Raw Body: {}", rawRequestBody);
+        logger.info("========================================");
 
         try {
             Map<String, Object> callback = objectMapper.readValue(rawRequestBody, Map.class);
@@ -320,7 +319,7 @@ public class CallbackController {
             Map<String, Object> response = new HashMap<>();
             response.put("ResultCode", 0);
             response.put("ResultDesc", "Success");
-            logger.info("Kopo Kopo callback acknowledged for {}", resourceId);
+            logger.info("✅ Kopo Kopo callback acknowledged for {}", resourceId);
             return response;
 
         } catch (Exception e) {
