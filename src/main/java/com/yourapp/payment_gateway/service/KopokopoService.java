@@ -49,7 +49,6 @@ public class KopokopoService {
     public String getAccessToken(String clientId, String clientSecret) throws Exception {
         CachedToken existing = tokenMap.get(clientId);
         if (existing != null && existing.isValid()) {
-            logger.debug("✅ Using cached Kopo Kopo token for clientId: {}", clientId);
             return existing.token;
         }
 
@@ -59,11 +58,8 @@ public class KopokopoService {
                 return existing.token;
             }
 
-            logger.info("🔄 Getting new Kopo Kopo token for clientId: {}", clientId);
             String newToken = requestNewToken(clientId, clientSecret);
-
             tokenMap.put(clientId, new CachedToken(newToken, System.currentTimeMillis() + 3300000));
-            logger.info("✅ Kopo Kopo token cached for clientId: {}", clientId);
             return newToken;
         }
     }
@@ -93,11 +89,9 @@ public class KopokopoService {
             }
 
             String token = extractAccessToken(responseBody);
-            logger.info("✅ Kopo Kopo token obtained successfully for clientId: {}", clientId);
             
-            // 🔑 LOG FULL TOKEN FOR TESTING PURPOSES ONLY
-            // ⚠️ REMOVE THIS LINE AFTER DEBUGGING!
-            logger.info("🔑 FULL ACCESS TOKEN: {}", token);
+            // ⚠️ SECURITY: This logs the full access token - REMOVED!
+            // Previously logged: logger.info("🔑 FULL ACCESS TOKEN: {}", token);
             
             return token;
         } catch (Exception e) {
@@ -131,9 +125,6 @@ public class KopokopoService {
             String phoneNumber,
             String orderReference,
             String callbackUrl) throws Exception {
-
-        logger.info("📤 Sending Kopo Kopo STK Push for order: {}, amount: {}", 
-                    orderReference, amount);
 
         // Sanitize inputs
         String cleanTill = tillNumber != null ? tillNumber.trim() : "";
@@ -194,22 +185,6 @@ public class KopokopoService {
         // ============================================================
         String url = KOPOKOPO_BASE_URL.replaceAll("/+$", "") + "/api/v2/incoming_payments";
 
-        // ============================================================
-        // DETAILED LOGGING FOR DEBUGGING
-        // ============================================================
-        logger.info("========================================");
-        logger.info("📤 STK PUSH REQUEST DETAILS");
-        logger.info("========================================");
-        logger.info("📍 URL: {}", url);
-        logger.info("📍 Till Number: {}", cleanTill);
-        logger.info("📍 Phone Number: {}", formattedPhone);
-        logger.info("📍 Amount: {}", roundedAmount);
-        logger.info("📍 Order Reference: {}", cleanOrderRef);
-        logger.info("📍 Callback URL: {}", cleanCallback);
-        logger.info("📍 Authorization: Bearer {}", accessToken.substring(0, Math.min(accessToken.length(), 20)) + "...");
-        logger.info("📍 Full Payload: {}", jsonBody);
-        logger.info("========================================");
-
         Request request = new Request.Builder()
             .url(url)
             .header("Content-Type", "application/json")
@@ -220,16 +195,9 @@ public class KopokopoService {
 
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
-            
-            logger.info("========================================");
-            logger.info("📥 STK PUSH RESPONSE");
-            logger.info("========================================");
-            logger.info("📍 Status: {}", response.code());
-            logger.info("📍 Response Body: {}", responseBody);
-            logger.info("========================================");
 
             if (!response.isSuccessful()) {
-                logger.error("❌ Kopo Kopo STK Push failed: status={}, body={}", 
+                logger.error("Kopo Kopo STK Push failed: status={}, body={}", 
                             response.code(), responseBody);
                 throw new Exception("Kopo Kopo STK Push failed: " + responseBody);
             }
@@ -242,22 +210,19 @@ public class KopokopoService {
             
             if (location != null && !location.isEmpty()) {
                 resourceId = location.substring(location.lastIndexOf("/") + 1);
-                logger.info("✅ Resource ID extracted from Location header: {}", resourceId);
             } else {
                 // Fallback: try to parse from response body
                 try {
                     resourceId = extractResourceId(responseBody);
-                    logger.info("✅ Resource ID extracted from response body: {}", resourceId);
                 } catch (Exception e) {
                     logger.error("Failed to extract resource ID from Location header or response body");
                     throw new Exception("Could not extract resource ID from response");
                 }
             }
 
-            logger.info("✅ Kopo Kopo STK Push sent successfully: {}", resourceId);
             return resourceId;
         } catch (Exception e) {
-            logger.error("❌ Error sending Kopo Kopo STK Push: {}", e.getMessage());
+            logger.error("Error sending Kopo Kopo STK Push: {}", e.getMessage());
             throw e;
         }
     }
@@ -288,9 +253,6 @@ public class KopokopoService {
             String tillNumber,
             String webhookUrl) throws Exception {
 
-        logger.info("🔍 Ensuring webhook subscription for till: {}", tillNumber);
-        logger.info("📋 Webhook URL: {}", webhookUrl);
-
         String accessToken = getAccessToken(clientId, clientSecret);
 
         List<Map<String, Object>> existingSubscriptions = getExistingSubscriptions(accessToken, tillNumber);
@@ -303,11 +265,9 @@ public class KopokopoService {
             });
 
         if (alreadySubscribed) {
-            logger.info("✅ Webhook already exists for till: {}", tillNumber);
             return true;
         }
 
-        logger.info("📝 Registering new webhook for till: {}", tillNumber);
         return registerWebhook(accessToken, tillNumber, webhookUrl);
     }
 
@@ -319,8 +279,6 @@ public class KopokopoService {
             tillNumber
         );
 
-        logger.debug("🔍 Fetching existing subscriptions from: {}", url);
-
         Request request = new Request.Builder()
             .url(url)
             .header("Authorization", "Bearer " + accessToken)
@@ -330,11 +288,9 @@ public class KopokopoService {
 
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
-            logger.info("📥 Existing subscriptions response: status={}", response.code());
-            logger.debug("📥 Response body: {}", responseBody);
 
             if (!response.isSuccessful()) {
-                logger.warn("⚠️ Failed to fetch existing subscriptions: status={}", response.code());
+                logger.error("Failed to fetch existing subscriptions: status={}", response.code());
                 return new ArrayList<>();
             }
 
@@ -355,11 +311,10 @@ public class KopokopoService {
                     }
                 }
 
-                logger.info("📋 Found {} existing subscriptions for till: {}", subscriptions.size(), tillNumber);
                 return subscriptions;
 
             } catch (Exception e) {
-                logger.warn("⚠️ Failed to parse subscriptions response: {}", e.getMessage());
+                logger.error("Failed to parse subscriptions response: {}", e.getMessage());
                 return new ArrayList<>();
             }
         }
@@ -376,18 +331,6 @@ public class KopokopoService {
 
         String jsonBody = objectMapper.writeValueAsString(payload);
 
-        logger.info("========================================");
-        logger.info("📤 WEBHOOK REGISTRATION REQUEST");
-        logger.info("========================================");
-        logger.info("📍 URL: {}", url);
-        logger.info("📍 Till Number: {}", tillNumber);
-        logger.info("📍 Webhook URL: {}", webhookUrl);
-        logger.info("📍 Scope: {}", payload.get("scope"));
-        logger.info("📍 Scope Reference: {}", payload.get("scope_reference"));
-        logger.info("📍 Event Type: {}", payload.get("event_type"));
-        logger.info("📍 Payload: {}", jsonBody);
-        logger.info("========================================");
-
         Request request = new Request.Builder()
             .url(url)
             .header("Content-Type", "application/json")
@@ -398,25 +341,16 @@ public class KopokopoService {
 
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
-            
-            logger.info("========================================");
-            logger.info("📥 WEBHOOK REGISTRATION RESPONSE");
-            logger.info("========================================");
-            logger.info("📍 Status: {}", response.code());
-            logger.info("📍 Response Body: {}", responseBody);
-            logger.info("========================================");
 
             if (response.isSuccessful() || response.code() == 201) {
-                logger.info("✅ Webhook registered successfully for till: {}", tillNumber);
                 return true;
             }
 
             if (response.code() == 409 || response.code() == 422) {
-                logger.info("ℹ️ Webhook already exists for till: {} (status: {})", tillNumber, response.code());
                 return true;
             }
 
-            logger.error("❌ Webhook registration failed: status={}, body={}", response.code(), responseBody);
+            logger.error("Webhook registration failed: status={}, body={}", response.code(), responseBody);
             return false;
         }
     }
@@ -424,28 +358,13 @@ public class KopokopoService {
     public void clearTokenCache(String clientId) {
         if (clientId != null && !clientId.isEmpty()) {
             tokenMap.remove(clientId);
-            logger.info("🗑️ Kopo Kopo token cache cleared for clientId: {}", clientId);
         } else {
             tokenMap.clear();
-            logger.info("🗑️ All Kopo Kopo tokens cleared");
         }
     }
 
     // ================================================
-    // DEBUG METHOD - LOG CURRENT TOKEN
+    // DEBUG METHOD - LOG CURRENT TOKEN (REMOVED - SECURITY RISK)
     // ================================================
-    public void logCurrentToken(String clientId) {
-        CachedToken cached = tokenMap.get(clientId);
-        if (cached != null && cached.isValid()) {
-            logger.info("========================================");
-            logger.info("🔑 CURRENT ACCESS TOKEN FOR TESTING:");
-            logger.info("📋 Client ID: {}", clientId);
-            logger.info("🔑 Token: {}", cached.token);
-            logger.info("⏰ Expires in: {} seconds", 
-                (cached.expiryTime - System.currentTimeMillis()) / 1000);
-            logger.info("========================================");
-        } else {
-            logger.warn("⚠️ No valid cached token found for clientId: {}", clientId);
-        }
-    }
+    // logCurrentToken() method removed entirely for security
 }
