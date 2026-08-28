@@ -45,8 +45,6 @@ public class DarajaService {
     public String getAccessToken(String consumerKey, String consumerSecret) throws Exception {
         // 1. CHECK CACHE FIRST (fast path, no lock)
         if (cachedAccessToken != null && System.currentTimeMillis() < tokenExpiryTime) {
-            logger.debug("✅ Using cached Safaricom token (expires in {} ms)", 
-                        tokenExpiryTime - System.currentTimeMillis());
             return cachedAccessToken;
         }
 
@@ -54,18 +52,15 @@ public class DarajaService {
         synchronized (tokenLock) {
             // Double-check inside lock to prevent race conditions
             if (cachedAccessToken != null && System.currentTimeMillis() < tokenExpiryTime) {
-                logger.debug("✅ Using cached Safaricom token (double-check)");
                 return cachedAccessToken;
             }
 
-            logger.info("🔄 Getting new Safaricom token");
             String newToken = requestNewToken(consumerKey, consumerSecret);
 
             // Store in cache with expiry (55 minutes to be safe)
             cachedAccessToken = newToken;
             tokenExpiryTime = System.currentTimeMillis() + 3300000; // 55 minutes
 
-            logger.info("✅ Safaricom token cached for 55 minutes");
             return newToken;
         }
     }
@@ -94,7 +89,6 @@ public class DarajaService {
             }
 
             String token = extractAccessToken(responseBody);
-            logger.info("✅ Token obtained successfully");
             return token;
         } catch (Exception e) {
             logger.error("Error getting token: {}", e.getMessage());
@@ -133,8 +127,6 @@ public class DarajaService {
             String phoneNumber,
             String orderReference,
             String callbackUrl) throws Exception {
-
-        logger.info("Sending STK Push for order: {}, amount: {}", orderReference, amount);
 
         // Sanitize inputs
         String cleanShortcode = shortcode != null ? shortcode.trim() : "";
@@ -194,8 +186,6 @@ public class DarajaService {
 
         String jsonBody = objectMapper.writeValueAsString(payload);
 
-        logger.debug("Outgoing Payload JSON: {}", jsonBody);
-
         String url = BASE_URL.replaceAll("/+$", "") + "/mpesa/stkpush/v1/processrequest";
 
         Request request = new Request.Builder()
@@ -207,7 +197,6 @@ public class DarajaService {
 
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body().string();
-            logger.info("Daraja raw response: {}", responseBody);
 
             if (!response.isSuccessful()) {
                 logger.error("STK Push failed: status={}, body={}", response.code(), responseBody);
@@ -215,7 +204,6 @@ public class DarajaService {
             }
 
             String checkoutRequestId = extractCheckoutRequestId(responseBody);
-            logger.info("STK Push sent successfully: {}", checkoutRequestId);
             return checkoutRequestId;
         } catch (Exception e) {
             logger.error("Error sending STK Push: {}", e.getMessage());
@@ -258,7 +246,7 @@ public class DarajaService {
         synchronized (tokenLock) {
             cachedAccessToken = null;
             tokenExpiryTime = 0;
-            logger.info("🗑️ Safaricom token cache cleared");
+            // Removed logger.info
         }
     }
 }

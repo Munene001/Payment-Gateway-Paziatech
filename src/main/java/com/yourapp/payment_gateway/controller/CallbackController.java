@@ -49,8 +49,6 @@ public class CallbackController {
             @RequestParam(value = "secret", required = false) String secret,
             @RequestBody Map<String, Object> callback) {
 
-        logger.info("Received callback from Safaricom");
-
         // Validate secret - return HTTP 401 if unauthorized
         if (expectedCallbackSecret != null && !expectedCallbackSecret.isBlank()) {
             if (secret == null || !secret.trim().equals(expectedCallbackSecret.trim())) {
@@ -72,8 +70,6 @@ public class CallbackController {
 
         int resultCode = parseResultCode(stkCallback.get("ResultCode"));
         String resultDesc = (String) stkCallback.getOrDefault("ResultDesc", "");
-
-        logger.info("Safaricom Callback: CheckoutRequestID={}, ResultCode={}", checkoutRequestId, resultCode);
 
         String status;
         boolean retryable;
@@ -155,8 +151,6 @@ public class CallbackController {
     public ResponseEntity<Map<String, Object>> handleKopokopoCallback(
             @RequestHeader(value = "X-KopoKopo-Signature", required = false) String signature,
             @RequestBody String rawRequestBody) {
-
-        logger.info("Received KopoKopo Callback");
 
         try {
             Map<String, Object> callback = objectMapper.readValue(rawRequestBody, Map.class);

@@ -33,11 +33,9 @@ public class WebhookController {
             @RequestHeader(value = "X-Internal-Api-Key", required = false) String apiKey,
             @RequestBody Map<String, String> request) {
 
-        logger.info("📥 Webhook registration request received for till: {}", request.get("tillNumber"));
-
         // Security: Validate internal API key
         if (internalSecret == null || !internalSecret.equals(apiKey)) {
-            logger.error("❌ Unauthorized webhook registration attempt");
+            logger.error("Unauthorized webhook registration attempt");
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", "Unauthorized: Invalid internal API key");
@@ -61,8 +59,6 @@ public class WebhookController {
         String cleanBaseUrl = callbackBaseUrl != null ? callbackBaseUrl.replaceAll("/+$", "") : "";
         String webhookUrl = cleanBaseUrl + "/api/payments/kopokopo-callback";
 
-        logger.info("📍 Webhook URL: {}", webhookUrl);
-
         try {
             boolean registered = kopokopoService.ensureWebhookSubscribed(
                 clientId,
@@ -73,18 +69,17 @@ public class WebhookController {
 
             Map<String, Object> response = new HashMap<>();
             if (registered) {
-                logger.info("✅ Webhook active for till: {}", tillNumber);
                 response.put("success", true);
                 response.put("message", "Webhook registered successfully");
             } else {
-                logger.error("❌ Webhook registration failed for till: {}", tillNumber);
+                logger.error("Webhook registration failed for till: {}", tillNumber);
                 response.put("success", false);
                 response.put("error", "Webhook registration failed");
             }
             return response;
 
         } catch (Exception e) {
-            logger.error("❌ Webhook registration error for till {}: {}", tillNumber, e.getMessage());
+            logger.error("Webhook registration error for till {}: {}", tillNumber, e.getMessage());
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", "Webhook registration error: " + e.getMessage());

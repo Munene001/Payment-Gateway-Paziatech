@@ -35,8 +35,6 @@ public class PaymentController {
     // ================================================
     @PostMapping("/stk-push")
     public Map<String, Object> stkPush(@RequestBody Map<String, String> request) {
-        logger.info("STK Push request received");
-
         String type = request.get("type");
         String transactionType = (type != null && !type.isBlank()) ? type.trim() : "CustomerPayBillOnline";
         
@@ -47,8 +45,6 @@ public class PaymentController {
         String orderReference = request.get("orderReference") != null ? request.get("orderReference").trim() : "";
         
         String phoneNumber = request.get("phoneNumber") != null ? request.get("phoneNumber").trim().replace("+", "") : "";
-
-        logger.info("Order: {}, Phone: {}, Amount: {}, Type: {}", orderReference, phoneNumber, request.get("amount"), transactionType);
 
         Double amount = 0.0;
         String amountStr = request.get("amount");
@@ -88,8 +84,6 @@ public class PaymentController {
                 callbackUrl
             );
 
-            logger.info("STK Push successful for order {}: {}", orderReference, checkoutRequestId);
-
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("CheckoutRequestID", checkoutRequestId);
@@ -112,16 +106,11 @@ public class PaymentController {
     // ================================================
     @PostMapping("/kopokopo-stk-push")
     public Map<String, Object> kopokopoStkPush(@RequestBody Map<String, String> request) {
-        logger.info("Kopo Kopo STK Push request received");
-
         String clientId = request.get("clientId") != null ? request.get("clientId").trim() : "";
         String clientSecret = request.get("clientSecret") != null ? request.get("clientSecret").trim() : "";
         String tillNumber = request.get("tillNumber") != null ? request.get("tillNumber").trim() : "";
         String orderReference = request.get("orderReference") != null ? request.get("orderReference").trim() : "";
         String phoneNumber = request.get("phoneNumber") != null ? request.get("phoneNumber").trim().replace("+", "") : "";
-
-        logger.info("Kopo Kopo Order: {}, Phone: {}, Amount: {}, Till: {}", 
-                    orderReference, phoneNumber, request.get("amount"), tillNumber);
 
         Double amount = 0.0;
         String amountStr = request.get("amount");
@@ -166,8 +155,6 @@ public class PaymentController {
                 orderReference,
                 callbackUrl
             );
-
-            logger.info("Kopo Kopo STK Push successful for order {}: {}", orderReference, resourceId);
 
             // Return in unified format (matches Safaricom format for Next.js)
             Map<String, Object> response = new HashMap<>();
