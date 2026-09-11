@@ -1,11 +1,11 @@
 # Payment Gateway
 
 <p align="center">
-  <strong>Backend payment gateway service built with Spring Boot.</strong>
+  <strong>Payment gateway service built with Spring Boot.</strong>
 </p>
 
 <p align="center">
-  A backend service for integrating M-Pesa payments into applications through REST APIs.
+  A backend service integrating M-Pesa Daraja and Kopo Kopo payment APIs through REST endpoints.
 </p>
 
 <p align="center">
@@ -17,60 +17,57 @@
 
 ## Overview
 
-Payment Gateway is a Spring Boot backend service designed to simplify M-Pesa payment integration for applications.
+Payment Gateway is a Spring Boot backend service for integrating mobile money payments into applications.
 
-The service exposes REST APIs that handle payment requests and communicates with the M-Pesa Daraja API.
+The service works with both the **M-Pesa Daraja API** and **Kopo Kopo API**, providing a backend layer for handling payment requests and communicating with external payment providers.
 
 ## Features
 
-* 💳 M-Pesa payment integration
+* 💳 M-Pesa Daraja API integration
+* 💰 Kopo Kopo API integration
 * 🔌 RESTful APIs
-* 🔐 API authentication and validation
+* 🔐 Request validation and authentication
 * 🔄 Payment request handling
-* 📡 External API integration
-* ⚠️ Error handling and response management
+* 📡 Third-party API integration
+* ⚠️ Error handling
 * 🐳 Docker support
 
 ## Tech Stack
 
-| Area             | Technologies      |
-| ---------------- | ----------------- |
-| Language         | Java              |
-| Framework        | Spring Boot       |
-| API              | REST              |
-| Payment          | M-Pesa Daraja API |
-| Build Tool       | Maven             |
-| Containerization | Docker            |
-| Version Control  | Git / GitHub      |
+| Area             | Technologies             |
+| ---------------- | ------------------------ |
+| Language         | Java                     |
+| Framework        | Spring Boot              |
+| API              | REST                     |
+| Payment APIs     | M-Pesa Daraja, Kopo Kopo |
+| Build Tool       | Maven                    |
+| Containerization | Docker                   |
+| Version Control  | Git / GitHub             |
 
 ## Architecture
 
 ```text
-                  ┌─────────────────┐
-                  │    Client App   │
-                  └────────┬────────┘
-                           │
-                           │ REST API
-                           ▼
-                  ┌─────────────────┐
-                  │  Spring Boot    │
-                  │ Payment Service │
-                  └────────┬────────┘
-                           │
-                           │ API Request
-                           ▼
-                  ┌─────────────────┐
-                  │  M-Pesa Daraja  │
-                  │       API       │
-                  └────────┬────────┘
-                           │
-                           ▼
-                  ┌─────────────────┐
-                  │ Payment Result  │
-                  └─────────────────┘
+                       ┌─────────────────┐
+                       │    Client App   │
+                       └────────┬────────┘
+                                │
+                                │ REST API
+                                ▼
+                       ┌─────────────────┐
+                       │  Spring Boot    │
+                       │ Payment Service │
+                       └────────┬────────┘
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+                    ▼                       ▼
+             ┌──────────────┐       ┌──────────────┐
+             │ M-Pesa       │       │ Kopo Kopo    │
+             │ Daraja API   │       │ API          │
+             └──────────────┘       └──────────────┘
 ```
 
-## API Flow
+## Payment Flow
 
 ```text
 Client
@@ -79,20 +76,21 @@ Client
   ▼
 Spring Boot API
   │
-  │ Validate Request
-  ▼
-Payment Service
+  ├── M-Pesa Daraja
   │
-  │ Daraja API Request
-  ▼
-M-Pesa
-  │
-  │ Response
-  ▼
-Spring Boot
-  │
-  ▼
-Client
+  └── Kopo Kopo
+        │
+        ▼
+   Payment Provider
+        │
+        ▼
+   Payment Response
+        │
+        ▼
+   Spring Boot API
+        │
+        ▼
+      Client
 ```
 
 ## Getting Started
@@ -102,7 +100,8 @@ Client
 * Java 17+
 * Maven
 * Docker
-* M-Pesa Daraja API credentials
+* M-Pesa Daraja credentials
+* Kopo Kopo API credentials
 
 ### Clone
 
@@ -112,11 +111,11 @@ git clone https://github.com/Munene001/Payment-Gateway-Paziatech.git
 cd Payment-Gateway-Paziatech
 ```
 
-### Configure Environment
+### Configuration
 
-Configure the required M-Pesa credentials and application settings using environment variables or your local configuration.
+Configure the required payment provider credentials and application settings using environment variables or your local configuration.
 
-Never commit API credentials or other secrets to the repository.
+Do not commit API credentials or other secrets to the repository.
 
 ### Run
 
@@ -146,12 +145,13 @@ docker run -p 8080:8080 payment-gateway
 
 ## What I Worked On
 
-* Built the payment service using Spring Boot and Java.
-* Integrated the M-Pesa Daraja API.
-* Designed REST endpoints for payment operations.
+* Built the payment service using Java and Spring Boot.
+* Integrated M-Pesa Daraja and Kopo Kopo APIs.
+* Developed REST endpoints for payment operations.
 * Implemented request validation and error handling.
-* Structured the application for integration with external applications.
-* Containerized the service using Docker.
+* Worked with external payment APIs and their responses.
+* Structured the service for integration with other applications.
+* Containerized the application using Docker.
 
 ## Project
 
